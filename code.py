@@ -400,19 +400,40 @@ ifo = IsolationForest(contamination=outliers_fraction)
 ifo.fit(testPredict)
 anom1=pd.Series(ifo.predict(testPredict))
 a=anom1[anom1==-1]
-model =svm.OneClassSVM(nu=.005)
+model =svm.OneClassSVM(nu=0.01)
 model.fit(testPredict)
-#anom=(pd.Series(model.predict(xt_valid)))
+#anom=(pd.Series(model.predict(testPredict)))
 #a=anom[anom==-1]
-fig, ax = plt.subplots(figsize=(9,7))
-plt.plot(df_train.I_1251)
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(2,1,figsize=(15,15))
+plt.subplot(211)
+#plt.plot(df_train.I_1251)
 plt.plot(df_valid.I_1251)
 plt.scatter(df_valid.index[a.index],df_valid.I_1251.values[a.index],c='Red')
+plt.legend(['Data','Anomaly'])
+plt.ylabel('Temperature (K)')
 
 
 
 
+#tt=pd.DataFrame(testPredict)
+tt=pd.DataFrame(range(0,len(testPredict)))
+tt['num']=testPredict
+#tt['num']=range(0,len(tt))
+ifo.fit(tt.values)
+from sklearn.inspection import DecisionBoundaryDisplay
+plt.subplot(212)
+disp = DecisionBoundaryDisplay.from_estimator(
+    ifo,
+    tt.values,
+    ax=plt,
+    response_method="predict",
+    alpha=0.5,
+)
 
+plt.scatter(range(0,len(tt)),testPredict,marker='.')
+plt.ylabel('Principal Component value')
+plt.savefig('./ISO.png')
 
 
 
