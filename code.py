@@ -328,7 +328,7 @@ df=pd.read_csv('./test.csv')
 df['Date'] = pd.to_datetime(df.SCET, format="%Y-%m-%dT%H:%M:%S.%f")
 df.drop(['SCET'],axis=1)
 df=df.resample('60T',on='Date').mean()
-#df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
+df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
 
 df_train=df.iloc[0:math.floor(len(df)*.8),:]
 df_valid=df.iloc[math.floor(len(df)*.8):,:]
@@ -435,6 +435,102 @@ plt.scatter(range(0,len(tt)),testPredict,marker='.')
 plt.ylabel('Principal Component value')
 plt.savefig('./ISO.png')
 
+
+
+
+#%% Do PCA, then ARIMA
+from pmdarima import auto_arima
+from sklearn.metrics import mean_absolute_error
+df=pd.read_csv('./test.csv')
+df['Date'] = pd.to_datetime(df.SCET, format="%Y-%m-%dT%H:%M:%S.%f")
+df.drop(['SCET'],axis=1)
+df=df.resample('60T',on='Date').mean()
+df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
+
+df_train=df.iloc[0:math.floor(len(df)*.8),:]
+df_valid=df.iloc[math.floor(len(df)*.8):,:]
+
+pca = PCA(n_components=1)
+features = range(pca.n_components)
+xt=pca.fit(df).transform(df)
+
+xt_train=xt[0:math.floor(len(xt)*.8),:]
+xt_valid=xt[math.floor(len(xt)*.8):,:]
+
+
+
+exogenous_features=df_train.keys()
+model = auto_arima(
+    df_train["I_1251"],
+    exogenous=df_train[exogenous_features],
+    trace=True,
+    error_action="ignore",
+    suppress_warnings=True,
+    seasonal=False,
+    m=1)
+
+
+model.fit(df_train.I_1251, exogenous=df_train[exogenous_features])
+forecast = model.predict(n_periods=len(df_valid), exogenous=df_valid[exogenous_features])
+df_valid.insert(len(df_valid.columns),"Forecast_ARIMAX",forecast,True)
+
+
+df_valid[["I_1251", "Forecast_ARIMAX"]].plot(figsize=(9, 5))
+plt.legend(['Temperature (Truth)','Forecast (ARIMA)'])
+plt.show()
+
+print("RMSE of Auto ARIMAX:", np.sqrt(mean_squared_error(df_valid.I_1251, df_valid.Forecast_ARIMAX)))
+print("\nMAE of Auto ARIMAX:", mean_absolute_error(df_valid.I_1251, df_valid.Forecast_ARIMAX))
+
+
+ifo = IsolationForest(contamination=outliers_fraction)
+
+#xt=np.array(df.High.values).reshape(-1,1)
+ifo.fit(df_valid.Forecast_ARIMAX.values.reshape(-1,1))
+anom1=pd.Series(ifo.predict(df_valid.Forecast_ARIMAX.values.reshape(-1,1)))
+a=anom1[anom1==-1]
+
+plt.plot(df_valid.Forecast_ARIMAX)
+plt.scatter(df_valid.index[a.index],df_valid.Forecast_ARIMAX.values[a.index],c='Red')
+
+
+#%% FB Prophet
+
+
+# make an out-of-sample forecast
+from pandas import read_csv
+from pandas import to_datetime
+from pandas import DataFrame
+from prophet import Prophet
+from matplotlib import pyplot
+df=pd.read_csv('./test.csv')
+df['Date'] = pd.to_datetime(df.SCET, format="%Y-%m-%dT%H:%M:%S.%f")
+df.drop(['SCET'],axis=1)
+df=df.resample('60T',on='Date').mean()
+df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
+
+df_train=df.iloc[0:math.floor(len(df)*.9),:]
+df_valid=df.iloc[math.floor(len(df)*.9):,:]
+dff=pd.DataFrame(df_train.I_0221.values,columns=['y'])
+#dff=pd.DataFrame(xt_train,columns=['y'])
+dff['ds']=df_train.index
+model = Prophet()
+# fit the model
+model.fit(dff)
+# define the period for which we want a prediction
+forecast = model.predict(pd.DataFrame(list(df_valid.index),columns=['ds']))
+# summarize the forecast
+print(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].head())
+# plot forecast
+model.plot(forecast)
+pyplot.show()
+
+fig, ax = plt.subplots(1,1,figsize=(15,15))
+plt.plot(forecast.ds,forecast.yhat)
+plt.plot(df_valid.I_0221)
+#plt.plot(forecast.ds,xt_valid)
+
+print("RMSE of Prophet:", np.sqrt(mean_squared_error(df_valid.I_0221, forecast.yhat)))
 
 
 
