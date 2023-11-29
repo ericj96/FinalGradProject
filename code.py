@@ -229,7 +229,8 @@ df['Date'] = pd.to_datetime(df.SCET, format="%Y-%m-%dT%H:%M:%S.%f")
 df.drop(['SCET'],axis=1)
 df=df.resample('60T',on='Date').mean()
 #df=df[['I_0221','I_1249','I_0342']]
-df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
+df=df[df.keys()[[0,2,6,8,10,12,14,16,18,20,21,22,24,26,28,30]]]
+#df=df[df.keys()[[0,2,4,6,8]]]
 
 
 df_train=df.iloc[0:math.floor(len(df)*.6),:]
@@ -256,7 +257,7 @@ xt=pca.fit(df_train).transform(df_valid)
 xt_train=pca.fit(df_train).transform(df_train)
 xt_valid=pca.fit(df_valid).transform(df_valid)
 
-outliers_fraction = 0.01
+outliers_fraction = 0.03
 from sklearn.ensemble import IsolationForest
 ifo = IsolationForest(contamination=outliers_fraction)
 
@@ -267,20 +268,25 @@ a=anom1[anom1==-1]
 
 
 
-model =svm.OneClassSVM(nu=.005)
+model =svm.OneClassSVM(nu=.5)
 model.fit(xt_train)
-#anom=(pd.Series(model.predict(xt_valid)))
-#a=anom[anom==-1]
+anom_ocsvm=(pd.Series(model.predict(xt_valid)))
+a_ocsvm=anom_ocsvm[anom_ocsvm==-1]
 
 fig, ax = plt.subplots(figsize=(9,7))
-#plt.plot(df_train.I_0233)
-plt.plot(df_valid.I_0233)
-plt.scatter(df_valid.index[a.index],df_valid.I_0233.values[a.index],c='Red')
+plt.plot(df_valid.I_0221)
+plt.scatter(df_valid.index[a.index],df_valid.I_0221.values[a.index],c='Red')
+
+
+fig, ax = plt.subplots(figsize=(9,7))
+plt.plot(df_valid.I_0221)
+plt.scatter(df_valid.index[a_ocsvm.index],df_valid.I_0221.values[a_ocsvm.index],c='Red')
 
 
 
 
-# KMEANS
+
+#%% KMEANS
 
 def getDistanceByPoint(data, model):
     distance = pd.Series()
