@@ -532,6 +532,14 @@ plt.plot(df_valid.I_0221)
 
 print("RMSE of Prophet:", np.sqrt(mean_squared_error(df_valid.I_0221, forecast.yhat)))
 
+model.plot_components(forecast)
+
+from prophet.plot import add_changepoints_to_plot
+fig = model.plot(forecast)
+a = add_changepoints_to_plot(fig.gca(), model, forecast)
+
+
+
 
 
 #%%
