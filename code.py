@@ -268,21 +268,83 @@ a=anom1[anom1==-1]
 
 
 
-model =svm.OneClassSVM(nu=.5)
+model =svm.OneClassSVM(nu=.25)
 model.fit(xt_train)
 anom_ocsvm=(pd.Series(model.predict(xt_valid)))
 a_ocsvm=anom_ocsvm[anom_ocsvm==-1]
 
-fig, ax = plt.subplots(figsize=(9,7))
+fig, ax = plt.subplots(2,1,figsize=(12,9))
+plt.subplot(211)
 plt.plot(df_valid.I_0221)
 plt.scatter(df_valid.index[a.index],df_valid.I_0221.values[a.index],c='Red')
-
-
-fig, ax = plt.subplots(figsize=(9,7))
+plt.title('Isolation Forest Detected Anomalies')
+#fig, ax = plt.subplots(figsize=(9,7))
+plt.subplot(212)
 plt.plot(df_valid.I_0221)
 plt.scatter(df_valid.index[a_ocsvm.index],df_valid.I_0221.values[a_ocsvm.index],c='Red')
+plt.title('OCSVM Detected Anomalies (nu = %s)' % model.get_params()['nu'])
 
 
+
+truth=pd.read_csv('truth_def.csv')
+truth_anom_inds=truth[truth.Truth_anom==1]
+
+
+######################### calculate statistics ###########################
+from sklearn.metrics import f1_score,recall_score,precision_score
+from sklearn.metrics import mean_squared_error
+from tabulate import tabulate
+from collections import OrderedDict
+
+def perf_measure(y_actual, y_hat):
+    TP = 0
+    FP = 0
+    TN = 0
+    FN = 0
+
+    for i in range(len(y_hat)): 
+        if y_actual[i]==y_hat[i]==1:
+           TP += 1
+        if y_hat[i]==1 and y_actual[i]!=y_hat[i]:
+           FP += 1
+        if y_actual[i]==y_hat[i]==0:
+           TN += 1
+        if y_hat[i]==0 and y_actual[i]!=y_hat[i]:
+           FN += 1
+
+    return(TP, FP, TN, FN)
+
+
+
+
+df_truth=truth
+anom=anom1.map(lambda val:1 if val==-1 else 0)
+#calculate F1 score
+f1=f1_score((df_truth['Truth_anom'].values),(anom.values))
+rec=recall_score(df_truth['Truth_anom'].values, anom.values)
+prec=precision_score(df_truth['Truth_anom'].values, anom.values)
+TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
+fpr=FP/(TN+FP)
+
+print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+
+final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
+final['Isolation_Forest (PCA)']=[f1,rec,prec,fpr]
+
+
+df_truth=truth
+anom=anom_ocsvm.map(lambda val:1 if val==-1 else 0)
+#calculate F1 score
+f1=f1_score((df_truth['Truth_anom'].values),(anom.values))
+rec=recall_score(df_truth['Truth_anom'].values, anom.values)
+prec=precision_score(df_truth['Truth_anom'].values, anom.values)
+TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
+fpr=FP/(TN+FP)
+
+print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+
+#final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
+final['OCSVM (PCA)']=[f1,rec,prec,fpr]
 
 
 
@@ -326,6 +388,19 @@ plt.show();
 plt.plot(df_valid.I_0233)
 plt.scatter(df_valid.index[a.index],df_valid.I_0233.values[a.index],c='Red')
 
+df_truth=truth
+anom=an
+#calculate F1 score
+f1=f1_score((df_truth['Truth_anom'].values),(anom.values))
+rec=recall_score(df_truth['Truth_anom'].values, anom.values)
+prec=precision_score(df_truth['Truth_anom'].values, anom.values)
+TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
+fpr=FP/(TN+FP)
+
+print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+
+#final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
+final['KMEANS (PCA)']=[f1,rec,prec,fpr]
 
 
 
@@ -334,10 +409,11 @@ df=pd.read_csv('./test.csv')
 df['Date'] = pd.to_datetime(df.SCET, format="%Y-%m-%dT%H:%M:%S.%f")
 df.drop(['SCET'],axis=1)
 df=df.resample('60T',on='Date').mean()
-df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
+#df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
+df=df[df.keys()[[0,2,6,8,10,12,14,16,18,20,21,22,24,26,28,30]]]
 
-df_train=df.iloc[0:math.floor(len(df)*.8),:]
-df_valid=df.iloc[math.floor(len(df)*.8):,:]
+df_train=df.iloc[0:math.floor(len(df)*.6),:]
+df_valid=df.iloc[math.floor(len(df)*.6):,:]
 pca = PCA(n_components=1)
 #pca = PCA()
 #pca.fit(df_train).transform(df_valid)
@@ -352,7 +428,7 @@ from sklearn.preprocessing import MinMaxScaler
 scaler = MinMaxScaler(feature_range=(0, 1))
 #dataset = scaler.fit_transform(xt[:,1].reshape(-1,1))
 dataset = scaler.fit_transform(xt[:,0].reshape(-1,1))
-train_size = int(len(dataset) * .8)
+train_size = int(len(dataset) * .6)
 test_size = len(dataset) - train_size
 train, test = dataset[0:train_size,:], dataset[train_size:len(dataset),:]
 print(len(train), len(test))
@@ -406,16 +482,16 @@ ifo = IsolationForest(contamination=outliers_fraction)
 ifo.fit(testPredict)
 anom1=pd.Series(ifo.predict(testPredict))
 a=anom1[anom1==-1]
-model =svm.OneClassSVM(nu=0.01)
+model =svm.OneClassSVM(nu=0.17)
 model.fit(testPredict)
-#anom=(pd.Series(model.predict(testPredict)))
-#a=anom[anom==-1]
+anom_ocsvm=(pd.Series(model.predict(testPredict)))
+a=anom_ocsvm[anom_ocsvm==-1]
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots(2,1,figsize=(15,15))
 plt.subplot(211)
 #plt.plot(df_train.I_1251)
-plt.plot(df_valid.I_1251)
-plt.scatter(df_valid.index[a.index],df_valid.I_1251.values[a.index],c='Red')
+plt.plot(df_valid.I_0221)
+plt.scatter(df_valid.index[a.index],df_valid.I_0221.values[a.index],c='Red')
 plt.legend(['Data','Anomaly'])
 plt.ylabel('Temperature (K)')
 
@@ -444,30 +520,64 @@ plt.savefig('./ISO.png')
 
 
 
-#%% Do PCA, then ARIMA
+df_truth=truth
+anom=anom1.map(lambda val:1 if val==-1 else 0)
+#calculate F1 score
+f1=f1_score((df_truth['Truth_anom'].values),(anom.values))
+rec=recall_score(df_truth['Truth_anom'].values, anom.values)
+prec=precision_score(df_truth['Truth_anom'].values, anom.values)
+TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
+fpr=FP/(TN+FP)
+
+print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+
+#final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
+final['LTSM then ISO (PCA)']=[f1,rec,prec,fpr]
+
+
+
+
+
+df_truth=truth
+anom=anom_ocsvm.map(lambda val:1 if val==-1 else 0)
+#calculate F1 score
+f1=f1_score((df_truth['Truth_anom'].values),(anom.values))
+rec=recall_score(df_truth['Truth_anom'].values, anom.values)
+prec=precision_score(df_truth['Truth_anom'].values, anom.values)
+TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
+fpr=FP/(TN+FP)
+
+print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+
+#final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
+final['LTSM then OCSVM (PCA)']=[f1,rec,prec,fpr]
+
+
+#%% ARIMA then OCSVM and Isolation Forest
 from pmdarima import auto_arima
 from sklearn.metrics import mean_absolute_error
 df=pd.read_csv('./test.csv')
 df['Date'] = pd.to_datetime(df.SCET, format="%Y-%m-%dT%H:%M:%S.%f")
 df.drop(['SCET'],axis=1)
 df=df.resample('60T',on='Date').mean()
-df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
+#df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
+df=df[df.keys()[[0,2,6,8,10,12,14,16,18,20,21,22,24,26,28,30]]]
 
-df_train=df.iloc[0:math.floor(len(df)*.8),:]
-df_valid=df.iloc[math.floor(len(df)*.8):,:]
+df_train=df.iloc[0:math.floor(len(df)*.6),:]
+df_valid=df.iloc[math.floor(len(df)*.6):,:]
 
 pca = PCA(n_components=1)
 features = range(pca.n_components)
 xt=pca.fit(df).transform(df)
 
-xt_train=xt[0:math.floor(len(xt)*.8),:]
-xt_valid=xt[math.floor(len(xt)*.8):,:]
+xt_train=xt[0:math.floor(len(xt)*.6),:]
+xt_valid=xt[math.floor(len(xt)*.6):,:]
 
 
 
 exogenous_features=df_train.keys()
 model = auto_arima(
-    df_train["I_1251"],
+    df_train["I_0221"],
     exogenous=df_train[exogenous_features],
     trace=True,
     error_action="ignore",
@@ -476,17 +586,17 @@ model = auto_arima(
     m=1)
 
 
-model.fit(df_train.I_1251, exogenous=df_train[exogenous_features])
+model.fit(df_train.I_0221, exogenous=df_train[exogenous_features])
 forecast = model.predict(n_periods=len(df_valid), exogenous=df_valid[exogenous_features])
 df_valid.insert(len(df_valid.columns),"Forecast_ARIMAX",forecast,True)
 
 
-df_valid[["I_1251", "Forecast_ARIMAX"]].plot(figsize=(9, 5))
+df_valid[["I_0221", "Forecast_ARIMAX"]].plot(figsize=(9, 5))
 plt.legend(['Temperature (Truth)','Forecast (ARIMA)'])
 plt.show()
 
-print("RMSE of Auto ARIMAX:", np.sqrt(mean_squared_error(df_valid.I_1251, df_valid.Forecast_ARIMAX)))
-print("\nMAE of Auto ARIMAX:", mean_absolute_error(df_valid.I_1251, df_valid.Forecast_ARIMAX))
+print("RMSE of Auto ARIMAX:", np.sqrt(mean_squared_error(df_valid.I_0221, df_valid.Forecast_ARIMAX)))
+print("\nMAE of Auto ARIMAX:", mean_absolute_error(df_valid.I_0221, df_valid.Forecast_ARIMAX))
 
 
 ifo = IsolationForest(contamination=outliers_fraction)
@@ -498,6 +608,188 @@ a=anom1[anom1==-1]
 
 plt.plot(df_valid.Forecast_ARIMAX)
 plt.scatter(df_valid.index[a.index],df_valid.Forecast_ARIMAX.values[a.index],c='Red')
+
+
+model =svm.OneClassSVM(nu=0.25)
+model.fit(df_valid.Forecast_ARIMAX.values.reshape(-1,1))
+anom_ocsvm=(pd.Series(model.predict(df_valid.Forecast_ARIMAX.values.reshape(-1,1))))
+a=anom_ocsvm[anom_ocsvm==-1]
+
+
+
+
+df_truth=truth
+anom=anom1.map(lambda val:1 if val==-1 else 0)
+#calculate F1 score
+f1=f1_score((df_truth['Truth_anom'].values),(anom.values))
+rec=recall_score(df_truth['Truth_anom'].values, anom.values)
+prec=precision_score(df_truth['Truth_anom'].values, anom.values)
+TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
+fpr=FP/(TN+FP)
+
+print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+
+#final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
+final['ARIMA then ISO (ARIMA)']=[f1,rec,prec,fpr]
+
+
+
+
+
+df_truth=truth
+anom=anom_ocsvm.map(lambda val:1 if val==-1 else 0)
+#calculate F1 score
+f1=f1_score((df_truth['Truth_anom'].values),(anom.values))
+rec=recall_score(df_truth['Truth_anom'].values, anom.values)
+prec=precision_score(df_truth['Truth_anom'].values, anom.values)
+TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
+fpr=FP/(TN+FP)
+
+print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+
+#final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
+final['ARIMA then OCSVM (ARIMA)']=[f1,rec,prec,fpr]
+
+
+
+
+
+#%% ARIMA then OCSVM and Isolation Forest w/ PCA
+from pmdarima import auto_arima
+from sklearn.metrics import mean_absolute_error
+df=pd.read_csv('./test.csv')
+df['Date'] = pd.to_datetime(df.SCET, format="%Y-%m-%dT%H:%M:%S.%f")
+df.drop(['SCET'],axis=1)
+df=df.resample('60T',on='Date').mean()
+#df=df[df.keys()[[0,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31]]]
+df=df[df.keys()[[0,2,6,8,10,12,14,16,18,20,21,22,24,26,28,30]]]
+
+df_train=df.iloc[0:math.floor(len(df)*.6),:]
+df_valid=df.iloc[math.floor(len(df)*.6):,:]
+
+pca = PCA(n_components=1)
+features = range(pca.n_components)
+xt=pca.fit(df).transform(df)
+
+xt_train=xt[0:math.floor(len(xt)*.6),:]
+xt_valid=xt[math.floor(len(xt)*.6):,:]
+
+dr=pd.DataFrame(xt,columns=['Values'])
+
+lag_features=["Values"]
+window1 = 3
+window2 = 7
+window3 = 30
+
+df_rolled_3d = dr[lag_features].rolling(window=window1, min_periods=0)
+df_rolled_7d = dr[lag_features].rolling(window=window2, min_periods=0)
+df_rolled_30d = dr[lag_features].rolling(window=window3, min_periods=0)
+
+df_mean_3d = df_rolled_3d.mean().shift(1).reset_index()
+df_mean_7d = df_rolled_7d.mean().shift(1).reset_index()
+df_mean_30d = df_rolled_30d.mean().shift(1).reset_index()
+
+df_std_3d = df_rolled_3d.std().shift(1).reset_index()
+df_std_7d = df_rolled_7d.std().shift(1).reset_index()
+df_std_30d = df_rolled_30d.std().shift(1).reset_index()
+
+for feature in lag_features:
+    
+    dr[f"{feature}_mean_lag{window1}"] = df_mean_3d[feature]
+    dr[f"{feature}_mean_lag{window2}"] = df_mean_7d[feature]
+    dr[f"{feature}_mean_lag{window3}"] = df_mean_30d[feature]
+    
+    dr[f"{feature}_std_lag{window1}"] = df_std_3d[feature]
+    dr[f"{feature}_std_lag{window2}"] = df_std_7d[feature]
+    dr[f"{feature}_std_lag{window3}"] = df_std_30d[feature]
+
+dr.index=df.index
+dr.fillna(dr.mean(), inplace=True)
+
+df_train=dr.iloc[0:math.floor(len(dr)*.8),:]
+df_valid=dr.iloc[math.floor(len(dr)*.8):,:]
+
+
+exogenous_features=['Values_mean_lag3', 'Values_mean_lag7', 'Values_mean_lag30',
+       'Values_std_lag3', 'Values_std_lag7', 'Values_std_lag30']
+
+model = auto_arima(
+    df_train.Values_mean_lag30,
+    trace=True,
+    error_action="ignore",
+    suppress_warnings=True,
+    seasonal=True,
+    m=1)
+
+
+model.fit(df_train['Values_mean_lag30'])
+forecast = model.predict(n_periods=len(df_valid))
+#df_valid=pd.DataFrame(xt_valid,columns=['I_0221'])
+df_valid.insert(len(df_valid.columns),"Forecast_ARIMAX",forecast,True)
+
+
+df_valid[["Values", "Forecast_ARIMAX"]].plot(figsize=(9, 5))
+plt.legend(['Temperature (Truth)','Forecast (ARIMA)'])
+plt.show()
+
+print("RMSE of Auto ARIMAX:", np.sqrt(mean_squared_error(df_valid.I_0221, df_valid.Forecast_ARIMAX)))
+print("\nMAE of Auto ARIMAX:", mean_absolute_error(df_valid.I_0221, df_valid.Forecast_ARIMAX))
+
+
+ifo = IsolationForest(contamination=outliers_fraction)
+
+#xt=np.array(df.High.values).reshape(-1,1)
+ifo.fit(df_valid.Forecast_ARIMAX.values.reshape(-1,1))
+anom1=pd.Series(ifo.predict(df_valid.Forecast_ARIMAX.values.reshape(-1,1)))
+a=anom1[anom1==-1]
+
+plt.plot(df_valid.Forecast_ARIMAX)
+plt.scatter(df_valid.index[a.index],df_valid.Forecast_ARIMAX.values[a.index],c='Red')
+
+
+model =svm.OneClassSVM(nu=0.25)
+model.fit(df_valid.Forecast_ARIMAX.values.reshape(-1,1))
+anom_ocsvm=(pd.Series(model.predict(df_valid.Forecast_ARIMAX.values.reshape(-1,1))))
+a=anom_ocsvm[anom_ocsvm==-1]
+
+
+
+
+df_truth=truth
+anom=anom1.map(lambda val:1 if val==-1 else 0)
+#calculate F1 score
+f1=f1_score((df_truth['Truth_anom'].values),(anom.values))
+rec=recall_score(df_truth['Truth_anom'].values, anom.values)
+prec=precision_score(df_truth['Truth_anom'].values, anom.values)
+TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
+fpr=FP/(TN+FP)
+
+print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+
+#final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
+final['ARIMA then ISO (PCA)']=[f1,rec,prec,fpr]
+
+
+
+
+
+df_truth=truth
+anom=anom_ocsvm.map(lambda val:1 if val==-1 else 0)
+#calculate F1 score
+f1=f1_score((df_truth['Truth_anom'].values),(anom.values))
+rec=recall_score(df_truth['Truth_anom'].values, anom.values)
+prec=precision_score(df_truth['Truth_anom'].values, anom.values)
+TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
+fpr=FP/(TN+FP)
+
+print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+
+#final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
+final['ARIMA then OCSVM (PCA)']=[f1,rec,prec,fpr]
+
+
+
+
 
 
 #%% FB Prophet
