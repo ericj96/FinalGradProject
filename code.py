@@ -257,7 +257,7 @@ xt=pca.fit(df_train).transform(df_valid)
 xt_train=pca.fit(df_train).transform(df_train)
 xt_valid=pca.fit(df_valid).transform(df_valid)
 
-outliers_fraction = 0.03
+outliers_fraction = 0.0305
 from sklearn.ensemble import IsolationForest
 ifo = IsolationForest(contamination=outliers_fraction)
 
@@ -268,7 +268,7 @@ a=anom1[anom1==-1]
 
 
 
-model =svm.OneClassSVM(nu=.25)
+model =svm.OneClassSVM(nu=.16)
 model.fit(xt_train)
 anom_ocsvm=(pd.Series(model.predict(xt_valid)))
 a_ocsvm=anom_ocsvm[anom_ocsvm==-1]
@@ -414,7 +414,7 @@ df=df[df.keys()[[0,2,6,8,10,12,14,16,18,20,21,22,24,26,28,30]]]
 
 df_train=df.iloc[0:math.floor(len(df)*.6),:]
 df_valid=df.iloc[math.floor(len(df)*.6):,:]
-pca = PCA(n_components=1)
+pca = PCA(n_components=2)
 #pca = PCA()
 #pca.fit(df_train).transform(df_valid)
 features = range(pca.n_components)
@@ -610,7 +610,7 @@ plt.plot(df_valid.Forecast_ARIMAX)
 plt.scatter(df_valid.index[a.index],df_valid.Forecast_ARIMAX.values[a.index],c='Red')
 
 
-model =svm.OneClassSVM(nu=0.25)
+model =svm.OneClassSVM(nu=0.16)
 model.fit(df_valid.Forecast_ARIMAX.values.reshape(-1,1))
 anom_ocsvm=(pd.Series(model.predict(df_valid.Forecast_ARIMAX.values.reshape(-1,1))))
 a=anom_ocsvm[anom_ocsvm==-1]
@@ -747,7 +747,7 @@ plt.plot(df_valid.Forecast_ARIMAX)
 plt.scatter(df_valid.index[a.index],df_valid.Forecast_ARIMAX.values[a.index],c='Red')
 
 
-model =svm.OneClassSVM(nu=0.25)
+model =svm.OneClassSVM(nu=0.16)
 model.fit(df_valid.Forecast_ARIMAX.values.reshape(-1,1))
 anom_ocsvm=(pd.Series(model.predict(df_valid.Forecast_ARIMAX.values.reshape(-1,1))))
 a=anom_ocsvm[anom_ocsvm==-1]
@@ -789,9 +789,11 @@ final['ARIMA then OCSVM (PCA)']=[f1,rec,prec,fpr]
 
 
 
+#%%
 
-
-
+final['Score']=['F1','Recall','Precision','FPR']
+final.index=final.Score
+final=final.drop(columns=['Score', 'F1','Recall','Precision','FPR'])
 #%% FB Prophet
 
 
@@ -840,108 +842,69 @@ a = add_changepoints_to_plot(fig.gca(), model, forecast)
 
 
 
-#%%
-import tensorflow as tf 
-from keras.layers import Input, Dense 
-from keras.models import Model 
-from sklearn.metrics import precision_recall_fscore_support 
+#%% try ARIMA and PCA on old data 
+df=pd.read_csv('./WheelTemperature.csv')
+df_battemp=pd.read_csv('./BatteryTemperature.csv')
+df_buscurrent=pd.read_csv('./TotalBusCurrent.csv')
+df_busvolt=pd.read_csv('./BusVoltage.csv')
+
+df_battemp.Date = pd.to_datetime(df_battemp.Date, format="%m/%d/%Y %H:%M")
+df_buscurrent.Date = pd.to_datetime(df_buscurrent.Date, format="%m/%d/%Y")
+df_busvolt.Date=pd.to_datetime(df_busvolt.Date, format="%m/%d/%Y %H:%M")
+df.Date = pd.to_datetime(df.Date, format="%m/%d/%Y %H:%M")
+
+df_battemp=df_battemp.resample('1D',on='Date').mean()
+df_buscurrent=df_buscurrent.resample('1D',on='Date').mean()
+df_busvolt=df_busvolt.resample('1D',on='Date').mean()
+df_busvolt=df_busvolt.loc['2004-02-13':]
+df=df.resample('1D',on='Date').mean()
+
+df=pd.concat([df,df_battemp,df_buscurrent,df_busvolt],axis=1)
+df['Date']=df.index
+#df=df.iloc[0:100000,:]
+
+df=df.drop(['Date'],axis=1)
+df_train=df.iloc[0:math.floor(len(df)*.75),:]
+df_valid=df.iloc[math.floor(len(df)*.75):,:]
+
+
+pca = PCA(n_components=4)
+#pca = PCA()
+pca.fit(df_train).transform(df_valid)
+features = range(pca.n_components_)
 
 
 
+xt=pca.fit(df_train).transform(df_valid)
+xt_train=pca.fit(df_train).transform(df_train)
+xt_valid=pca.fit(df_valid).transform(df_valid)
 
-data = pd.read_csv( 
-    'https://raw.githubusercontent.com/numenta'
-    '/NAB/master/data/realKnownCause/ambient'
-    '_temperature_system_failure.csv') 
-df=pd.read_csv('./test.csv')
-df['Date'] = pd.to_datetime(df.SCET, format="%Y-%m-%dT%H:%M:%S.%f")
-df.drop(['SCET'],axis=1)
-df=df.resample('.25D',on='Date').mean()
-#df=pd.DataFrame(df['I_0233'].values,columns=['I_0233'])
-data_tensor = tf.convert_to_tensor(df.values, dtype=tf.float32) 
-input_dim = df.shape[1]
-encoding_dim = 10
-input_layer = Input(shape=(input_dim,)) 
-encoder = Dense(encoding_dim, activation='relu')(input_layer) 
-decoder = Dense(input_dim, activation='relu')(encoder) 
-autoencoder = Model(inputs=input_layer, outputs=decoder) 
-autoencoder.compile(optimizer='adam', loss='mse') 
-autoencoder.fit(data_tensor, data_tensor, epochs=50, 
-                batch_size=32, shuffle=True) 
+outliers_fraction = 0.05
+from sklearn.ensemble import IsolationForest
+ifo = IsolationForest(contamination=outliers_fraction)
 
-reconstructions = autoencoder.predict(data_tensor) 
-mse = tf.reduce_mean(tf.square(data_tensor - reconstructions), 
-                     axis=1) 
-anomaly_scores = pd.Series(mse.numpy(), name='anomaly_scores') 
-anomaly_scores.index = df.index 
-
-
-threshold = anomaly_scores.quantile(0.99) 
-anomalous = anomaly_scores > threshold 
-binary_labels = anomalous.astype(int) 
-precision, recall,    f1_score, _ = precision_recall_fscore_support( 
-        binary_labels, anomalous, average='binary') 
-    
-    
-test = df['I_0233'].values 
-predictions = anomaly_scores.values 
-  
-print("Precision: ", precision) 
-print("Recall: ", recall) 
-print("F1 Score: ", f1_score) 
+#xt=np.array(df.High.values).reshape(-1,1)
+ifo.fit(xt_train)
+anom1=pd.Series(ifo.predict(xt_valid))
+a=anom1[anom1==-1]
 
 
 
+model =svm.OneClassSVM(nu=.05,kernel='poly')
+model.fit(xt_train)
+anom_ocsvm=(pd.Series(model.predict(xt_valid)))
+a_ocsvm=anom_ocsvm[anom_ocsvm==-1]
 
-plt.figure(figsize=(16, 8)) 
-plt.plot(df['I_0233']) 
-plt.plot(df['I_0233'][anomalous], 'ro') 
-plt.title('Anomaly Detection') 
-plt.xlabel('Time') 
-plt.ylabel('Value') 
-plt.show() 
-
-
-
-
-from tensorflow.keras import layers, losses
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Model
-class detector(Model):
-  def __init__(self, latent_dim, shape):
-    super(detector, self).__init__()
-    self.latent_dim = latent_dim
-    self.shape = shape
-    self.encoder = tf.keras.Sequential([
-      layers.Flatten(),
-      layers.Dense(latent_dim, activation='relu'),
-    ])
-    self.decoder = tf.keras.Sequential([
-      layers.Dense(tf.math.reduce_prod(shape), activation='sigmoid'),
-      layers.Reshape(shape)
-    ])
-
-  def call(self, x):
-    encoded = self.encoder(x)
-    decoded = self.decoder(encoded)
-    return decoded
-
-latent_dim = 64
-shape=data.shape[1:]
-autoencoder = detector(latent_dim,shape)
-autoencoder.compile(optimizer='adam', loss='mae')
-def plot(data, n):
-  enc_img = autoencoder.encoder(data)
-  dec_img = autoencoder.decoder(enc_img)
-  plt.plot(data[n], 'b')
-  plt.plot(dec_img[n], 'r')
-  plt.fill_between(np.arange(len(dec_img[n])), data[n], dec_img[n], color = 'lightcoral')
-  plt.legend(labels=['Input', 'Reconstruction', 'Error'])
-  plt.show()
-
-plot(df['I_0233'], 0)
-plot(an_test_data, 0)
-
+fig, ax = plt.subplots(2,1,figsize=(12,9))
+plt.subplot(211)
+plt.plot(df_valid.High)
+plt.scatter(df_valid.index[a.index],df_valid.High.values[a.index],c='Red')
+plt.title('Isolation Forest Detected Anomalies')
+#fig, ax = plt.subplots(figsize=(9,7))
+plt.subplot(212)
+plt.plot(df_valid.High)
+plt.scatter(df_valid.index[a_ocsvm.index],df_valid.High.values[a_ocsvm.index],c='Red')
+plt.title('OCSVM Detected Anomalies (nu = %s)' % model.get_params()['nu'])
 
 
 
