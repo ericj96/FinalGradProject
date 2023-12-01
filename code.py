@@ -232,6 +232,9 @@ df=df.resample('60T',on='Date').mean()
 df=df[df.keys()[[0,2,6,8,10,12,14,16,18,20,21,22,24,26,28,30]]]
 #df=df[df.keys()[[0,2,4,6,8]]]
 
+truth=pd.read_csv('truth_def.csv')
+truth_anom_inds=truth[truth.Truth_anom==1]
+df_truth=truth
 
 df_train=df.iloc[0:math.floor(len(df)*.6),:]
 df_valid=df.iloc[math.floor(len(df)*.6):,:]
@@ -285,9 +288,21 @@ plt.scatter(df_valid.index[a_ocsvm.index],df_valid.I_0221.values[a_ocsvm.index],
 plt.title('OCSVM Detected Anomalies (nu = %s)' % model.get_params()['nu'])
 
 
+fig, ax = plt.subplots(2,1,figsize=(12,9))
+plt.subplot(211)
+plt.plot(df_valid.I_0221)
+plt.scatter(df_valid.index[a_ocsvm.index],df_valid.I_0221.values[a_ocsvm.index],c='Red')
+plt.title('OCSVM Detected Anomalies (nu = %s)' % model.get_params()['nu'])
 
-truth=pd.read_csv('truth_def.csv')
-truth_anom_inds=truth[truth.Truth_anom==1]
+#fig, ax = plt.subplots(figsize=(9,7))
+plt.subplot(212)
+a_truth=df_truth.Truth_anom[df_truth.Truth_anom==1]
+plt.plot(df_valid.I_0221)
+plt.scatter(df_valid.index[a_truth.index],df_valid.I_0221.values[a_truth.index],c='Red')
+plt.title('Truth')
+
+
+
 
 
 ######################### calculate statistics ###########################
@@ -326,7 +341,7 @@ prec=precision_score(df_truth['Truth_anom'].values, anom.values)
 TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
 fpr=FP/(TN+FP)
 
-print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+print('IF: f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
 
 final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
 final['Isolation_Forest (PCA)']=[f1,rec,prec,fpr]
@@ -341,7 +356,7 @@ prec=precision_score(df_truth['Truth_anom'].values, anom.values)
 TP, FP, TN, FN=perf_measure(df_truth['Truth_anom'].values, anom.values)
 fpr=FP/(TN+FP)
 
-print('f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
+print('OCSVM: f1: %3.6f\nrecall: %3.6f\nprecision: %3.6f\nfpr: %3.6f\n' %(f1,rec,prec,fpr))
 
 #final=pd.DataFrame(columns=['F1','Recall','Precision','FPR'])
 final['OCSVM (PCA)']=[f1,rec,prec,fpr]
@@ -605,6 +620,7 @@ ifo = IsolationForest(contamination=outliers_fraction)
 ifo.fit(df_valid.Forecast_ARIMAX.values.reshape(-1,1))
 anom1=pd.Series(ifo.predict(df_valid.Forecast_ARIMAX.values.reshape(-1,1)))
 a=anom1[anom1==-1]
+a_ifo=a
 
 plt.plot(df_valid.Forecast_ARIMAX)
 plt.scatter(df_valid.index[a.index],df_valid.Forecast_ARIMAX.values[a.index],c='Red')
@@ -614,7 +630,7 @@ model =svm.OneClassSVM(nu=0.16)
 model.fit(df_valid.Forecast_ARIMAX.values.reshape(-1,1))
 anom_ocsvm=(pd.Series(model.predict(df_valid.Forecast_ARIMAX.values.reshape(-1,1))))
 a=anom_ocsvm[anom_ocsvm==-1]
-
+a_ocsvm=a
 
 
 
@@ -652,6 +668,37 @@ final['ARIMA then OCSVM (ARIMA)']=[f1,rec,prec,fpr]
 
 
 
+fig, ax = plt.subplots(2,1,figsize=(12,9))
+plt.subplot(211)
+plt.plot(df_valid.Forecast_ARIMAX)
+plt.scatter(df_valid.index[a_ifo.index],df_valid.Forecast_ARIMAX.values[a_ifo.index],c='Red')
+plt.title('Isolation Forest Detected Anomalies')
+#fig, ax = plt.subplots(figsize=(9,7))
+plt.subplot(212)
+plt.plot(df_valid.Forecast_ARIMAX)
+plt.scatter(df_valid.index[a_ocsvm.index],df_valid.Forecast_ARIMAX.values[a_ocsvm.index],c='Red')
+plt.title('OCSVM Detected Anomalies (nu = %s)' % model.get_params()['nu'])
+
+
+
+
+fig, ax = plt.subplots(3,1,figsize=(15,12))
+plt.subplot(311)
+plt.plot(df_valid.I_0221)
+plt.plot(df_valid.Forecast_ARIMAX)
+plt.legend(['Original Data','ARIMA'])
+plt.title('ARIMA model of data')
+plt.subplot(312)
+plt.plot(df_valid.Forecast_ARIMAX)
+plt.scatter(df_valid.index[a_ifo.index],df_valid.Forecast_ARIMAX.values[a_ifo.index],c='Red')
+plt.title('Isolation Forest Detected Anomalies')
+#fig, ax = plt.subplots(figsize=(9,7))
+plt.subplot(313)
+plt.plot(df_valid.Forecast_ARIMAX)
+plt.scatter(df_valid.index[a_ocsvm.index],df_valid.Forecast_ARIMAX.values[a_ocsvm.index],c='Red')
+plt.title('OCSVM Detected Anomalies (nu = %s)' % model.get_params()['nu'])
+
+
 
 
 #%% ARIMA then OCSVM and Isolation Forest w/ PCA
@@ -671,8 +718,8 @@ pca = PCA(n_components=1)
 features = range(pca.n_components)
 xt=pca.fit(df).transform(df)
 
-xt_train=xt[0:math.floor(len(xt)*.6),:]
-xt_valid=xt[math.floor(len(xt)*.6):,:]
+xt_train=xt[0:math.floor(len(xt)*.75),:]
+xt_valid=xt[math.floor(len(xt)*.75):,:]
 
 dr=pd.DataFrame(xt,columns=['Values'])
 
@@ -706,8 +753,8 @@ for feature in lag_features:
 dr.index=df.index
 dr.fillna(dr.mean(), inplace=True)
 
-df_train=dr.iloc[0:math.floor(len(dr)*.8),:]
-df_valid=dr.iloc[math.floor(len(dr)*.8):,:]
+df_train=dr.iloc[0:math.floor(len(dr)*.9),:]
+df_valid=dr.iloc[math.floor(len(dr)*.9):,:]
 
 
 exogenous_features=['Values_mean_lag3', 'Values_mean_lag7', 'Values_mean_lag30',
@@ -728,12 +775,12 @@ forecast = model.predict(n_periods=len(df_valid))
 df_valid.insert(len(df_valid.columns),"Forecast_ARIMAX",forecast,True)
 
 
-df_valid[["Values", "Forecast_ARIMAX"]].plot(figsize=(9, 5))
+df_valid[["Values_mean_lag30", "Forecast_ARIMAX"]].plot(figsize=(9, 5))
 plt.legend(['Temperature (Truth)','Forecast (ARIMA)'])
 plt.show()
 
-print("RMSE of Auto ARIMAX:", np.sqrt(mean_squared_error(df_valid.I_0221, df_valid.Forecast_ARIMAX)))
-print("\nMAE of Auto ARIMAX:", mean_absolute_error(df_valid.I_0221, df_valid.Forecast_ARIMAX))
+#print("RMSE of Auto ARIMAX:", np.sqrt(mean_squared_error(df_valid.I_0221, df_valid.Forecast_ARIMAX)))
+#print("\nMAE of Auto ARIMAX:", mean_absolute_error(df_valid.I_0221, df_valid.Forecast_ARIMAX))
 
 
 ifo = IsolationForest(contamination=outliers_fraction)
