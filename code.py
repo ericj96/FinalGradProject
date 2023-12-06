@@ -302,6 +302,11 @@ plt.scatter(df_valid.index[a_truth.index],df_valid.I_0221.values[a_truth.index],
 plt.title('Truth')
 
 
+fig, ax = plt.subplots(figsize=(12,9))
+a_truth=df_truth.Truth_anom[df_truth.Truth_anom==1]
+plt.plot(df_valid.I_0221)
+plt.scatter(df_valid.index[a_truth.index],df_valid.I_0221.values[a_truth.index],c='Red')
+plt.title('Truth')
 
 
 
